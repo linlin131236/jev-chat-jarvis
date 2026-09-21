@@ -52,12 +52,15 @@ class SettingsActivity : AppCompatActivity() {
         root.addView(header("设置"))
 
         // --- 接口 ---
-        root.addView(section("接口"))
+        root.addView(section("接口（兼容 OpenAI / AbinAPI / DeepSeek）"))
         val card1 = card()
-        card1.addView(label("OpenRouter 密钥"))
-        val keyEdit = edit(prefs.openRouterKey, "sk-or-v1-...", password = true)
+        card1.addView(label("API 接口地址 (Base URL)"))
+        val baseUrlEdit = edit(prefs.apiBaseUrl, Prefs.DEFAULT_BASE_URL)
+        card1.addView(baseUrlEdit)
+        card1.addView(label("API 密钥 (API Key)"))
+        val keyEdit = edit(prefs.apiKey, "sk-...", password = true)
         card1.addView(keyEdit)
-        card1.addView(label("回复生成模型"))
+        card1.addView(label("对话分析与生成模型"))
         val modelEdit = edit(prefs.replyModel, Prefs.DEFAULT_REPLY_MODEL)
         card1.addView(modelEdit)
         root.addView(card1)
@@ -99,7 +102,8 @@ class SettingsActivity : AppCompatActivity() {
         // --- Actions ---
         val result = text("", 13f, sub).apply { setPadding(0, dp(12), 0, dp(4)) }
         root.addView(primaryBtn("保存") {
-            prefs.openRouterKey = keyEdit.text.toString()
+            prefs.apiBaseUrl = baseUrlEdit.text.toString().ifBlank { Prefs.DEFAULT_BASE_URL }
+            prefs.apiKey = keyEdit.text.toString()
             prefs.replyModel = modelEdit.text.toString().ifBlank { Prefs.DEFAULT_REPLY_MODEL }
             prefs.relationship = relEdit.text.toString().ifBlank { Prefs.DEFAULT_REL }
             prefs.whitelist = wlEdit.text.toString().split("\n").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
@@ -108,6 +112,7 @@ class SettingsActivity : AppCompatActivity() {
             Toast.makeText(this, "已保存", Toast.LENGTH_SHORT).show()
         })
         root.addView(secondaryBtn("连通测试") {
+            val url = baseUrlEdit.text.toString().trim().ifBlank { Prefs.DEFAULT_BASE_URL }
             val key = keyEdit.text.toString().trim()
             val model = modelEdit.text.toString().trim().ifBlank { Prefs.DEFAULT_REPLY_MODEL }
             if (key.isBlank()) { result.text = "请先填密钥"; return@secondaryBtn }
@@ -115,7 +120,7 @@ class SettingsActivity : AppCompatActivity() {
             worker.execute {
                 val demo = ChatSnapshot("连通测试", listOf(
                     Msg("other", "在吗？"), Msg("me", "在"), Msg("other", "那你说说昨天答应我的事")))
-                val a = JevClient(key, model).analyze(demo, prefs.relationship)
+                val a = JevClient(url, key, model).analyze(demo, prefs.relationship)
                 main.post {
                     result.text = if (a.error != null) "失败：${a.error}"
                     else "成功：意图=${a.trueIntent?.choice ?: "?"}，候选=${a.rankedReplies.size} 条，耗时 ${a.latencyMs}ms"
